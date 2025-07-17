@@ -132,6 +132,29 @@ podman-shell: ## Get shell access to podman pod
 	@echo "$(BLUE)Opening shell in podman pod...$(NC)"
 	kubectl exec -it privileged-podman-pod -- /bin/bash
 
+vm-stop: ## Stop the Ubuntu VM
+	@echo "$(BLUE)Stopping Ubuntu VM...$(NC)"
+	@VM_NAME=$$(terraform output -raw vm_name 2>/dev/null || echo "ubuntu-vm"); \
+	ZONE=$$(terraform output -raw zone 2>/dev/null || echo "us-central1-a"); \
+	echo "Stopping VM: $$VM_NAME in zone: $$ZONE"; \
+	gcloud compute instances stop $$VM_NAME --zone=$$ZONE --project=$(SERVICE_PROJECT_ID) || true; \
+	echo "$(GREEN)VM stop command completed$(NC)"
+
+vm-start: ## Start the Ubuntu VM
+	@echo "$(BLUE)Starting Ubuntu VM...$(NC)"
+	@VM_NAME=$$(terraform output -raw vm_name 2>/dev/null || echo "ubuntu-vm"); \
+	ZONE=$$(terraform output -raw zone 2>/dev/null || echo "us-central1-a"); \
+	echo "Starting VM: $$VM_NAME in zone: $$ZONE"; \
+	gcloud compute instances start $$VM_NAME --zone=$$ZONE --project=$(SERVICE_PROJECT_ID) || true; \
+	echo "$(GREEN)VM start command completed$(NC)"
+
+vm-status: ## Show Ubuntu VM status
+	@echo "$(BLUE)Checking Ubuntu VM status...$(NC)"
+	@VM_NAME=$$(terraform output -raw vm_name 2>/dev/null || echo "ubuntu-vm"); \
+	ZONE=$$(terraform output -raw zone 2>/dev/null || echo "us-central1-a"); \
+	echo "VM: $$VM_NAME in zone: $$ZONE"; \
+	gcloud compute instances describe $$VM_NAME --zone=$$ZONE --project=$(SERVICE_PROJECT_ID) --format="value(status)" 2>/dev/null || echo "$(RED)VM not found or error occurred$(NC)"
+
 new-branch: ## Create new branch if files have been modified
 	@echo "$(BLUE)Checking for modified files...$(NC)"
 	@if [ -n "$$(git status --porcelain)" ]; then \
