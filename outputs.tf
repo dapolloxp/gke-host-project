@@ -49,3 +49,13 @@ output "ubuntu_vm_internal_ip" {
   description = "Internal IP address of the Ubuntu VM"
   value       = module.ubuntu_vm.vm_internal_ip
 }
+
+output "secrets_manager_secret_names" {
+  description = "Names of the created secrets"
+  value       = module.secrets_manager.secret_names
+}
+
+output "secrets_manager_secret_ids" {
+  description = "Full resource IDs of the created secrets"
+  value       = module.secrets_manager.secret_ids
+}

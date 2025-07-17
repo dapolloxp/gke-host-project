@@ -3,11 +3,11 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 5.0"
+      version = "= 6.44.0"
     }
     google-beta = {
       source  = "hashicorp/google-beta"
-      version = "~> 5.0"
+      version = "= 6.44.0"
     }
   }
 }
@@ -80,4 +80,17 @@ module "ubuntu_vm" {
   ssh_public_key     = var.vm_ssh_public_key
 
   depends_on = [module.host_vpc, module.gke_service_project]
+}
+
+# Secrets Manager
+module "secrets_manager" {
+  source = "./modules/secrets-manager"
+
+  project_id                        = var.service_project_id
+  region                           = var.region
+  secrets                          = var.secrets
+  gke_node_service_account         = module.gke_service_project.node_service_account_email
+  workload_identity_service_accounts = var.workload_identity_service_accounts
+
+  depends_on = [module.gke_service_project]
 }

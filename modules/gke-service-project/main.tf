@@ -130,6 +130,15 @@ resource "google_project_iam_member" "compute_logging_writer" {
   depends_on = [google_project_service.apis]
 }
 
+# Grant Artifact Registry access to default compute service account
+resource "google_project_iam_member" "compute_artifact_registry_writer" {
+  project = var.service_project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${data.google_project.service_project.number}-compute@developer.gserviceaccount.com"
+
+  depends_on = [google_project_service.apis]
+}
+
 # GKE Cluster
 resource "google_container_cluster" "primary" {
   name     = var.cluster_name
@@ -139,6 +148,7 @@ resource "google_container_cluster" "primary" {
   # Deletion Protection
 
   deletion_protection = false
+
 
   # Network configuration
   network    = "projects/${var.host_project_id}/global/networks/${var.network_name}"
@@ -197,7 +207,29 @@ resource "google_container_cluster" "primary" {
     network_policy_config {
       disabled = false
     }
+
+    gcp_filestore_csi_driver_config {
+      enabled = false
+    }
+
+    gcs_fuse_csi_driver_config {
+      enabled = false
+    }
+
+    gke_backup_agent_config {
+      enabled = false
+    }
+
+    config_connector_config {
+      enabled = false
+    }
+    
   }
+  # Enable Secret Manager
+
+  secret_manager_config {
+      enabled = true
+    }
 
   # Enable binary authorization
   binary_authorization {
