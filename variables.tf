@@ -89,3 +89,18 @@ variable "vm_ssh_public_key" {
   type        = string
   default     = ""
 }
+
+variable "secrets" {
+  description = "Map of secret names to their initial values"
+  type        = map(string)
+  default     = {}
+}
+
+variable "workload_identity_service_accounts" {
+  description = "Map of workload identity service accounts that need access to specific secrets"
+  type = map(object({
+    service_account = string
+    secret_name     = string
+  }))
+  default = {}
+}

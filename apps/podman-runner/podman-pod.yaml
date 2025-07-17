@@ -24,6 +24,9 @@ spec:
       mountPath: /var/lib/containers
     - name: tmp-storage
       mountPath: /tmp
+    - name: gcp-secrets-volume
+      mountPath: /mnt/secrets
+      readOnly: true
     resources:
       requests:
         memory: "512Mi"
@@ -34,6 +37,21 @@ spec:
     env:
     - name: STORAGE_DRIVER
       value: "overlay"
+    - name: DATABASE_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: gcp-secrets
+          key: database-password
+    - name: API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: gcp-secrets
+          key: api-key
+    - name: JWT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: gcp-secrets
+          key: jwt-secret
     command: ["/bin/bash"]
     args: ["-c", "while true; do sleep 30; done"]
   volumes:
@@ -41,4 +59,10 @@ spec:
     emptyDir: {}
   - name: tmp-storage
     emptyDir: {}
+  - name: gcp-secrets-volume
+    csi:
+      driver: secrets-store.csi.k8s.io
+      readOnly: true
+      volumeAttributes:
+        secretProviderClass: gcp-secret-provider
   restartPolicy: Always

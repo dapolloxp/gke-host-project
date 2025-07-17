@@ -220,24 +220,41 @@ gcloud container clusters get-credentials [CLUSTER_NAME] \
 │       └── podman-pod.yaml
 └── modules/
     ├── host-vpc/               # Shared VPC module
-    ├── gke-service-project/    # GKE service project module
+    ├── gke-service-project/    # GKE + centralized API management
     ├── artifact-registry/      # Docker registry module
+    ├── secrets-manager/        # Secret Manager module
     └── ubuntu-vm/              # Ubuntu VM module
 ```
 
 ## Key Features
 
 ### Host VPC Module
-- Creates shared VPC with custom subnets
+- Creates shared VPC with custom subnets (GKE + VM subnets)
 - Configures secondary IP ranges for GKE pods and services
 - Sets up Cloud NAT for internet access
-- Includes firewall rules for internal communication
+- Includes firewall rules for internal communication and IAP access
 
 ### GKE Service Project Module
+- **Centralized API Management** - Manages all GCP APIs via single for_each resource
 - Creates private GKE cluster with Workload Identity
 - Configures node pools with auto-scaling
 - Enables network policy and binary authorization
-- Sets up proper IAM roles and service accounts
+- Comprehensive IAM roles for GKE, Cloud Build, and compute services
+
+### Artifact Registry Module
+- Docker image repository for containerized applications
+- Integrated with Cloud Build for automated builds
+- IAM permissions for GKE node access
+
+### Secrets Manager Module
+- Secure secret storage with regional replication
+- GKE node access via IAM bindings
+- Workload Identity support for Kubernetes service accounts
+
+### Ubuntu VM Module
+- High-performance VM (4 vCPU, 16GB RAM, SSD storage)
+- Connected to dedicated VM subnet
+- IAP access without external IPs
 
 ### Security Features
 - Private GKE nodes (no external IPs)
@@ -245,12 +262,21 @@ gcloud container clusters get-credentials [CLUSTER_NAME] \
 - Network policies enabled
 - Binary authorization for container security
 - Shielded GKE nodes
+- Secret Manager for secure credential storage
 
 ## Customization
 
-Modify the variables in `terraform.tfvars` or environment-specific files to customize:
+Modify the variables in `terraform.tfvars` to customize:
 
-- Network CIDR ranges
-- GKE cluster configuration
-- Node pool settings
-- Regional deployment
+- **Network CIDR ranges** for GKE and VM subnets
+- **GKE cluster configuration** (node count, machine types, disk sizes)
+- **VM specifications** (machine type, disk size)
+- **Secrets** (add/remove secrets as needed)
+- **Regional deployment** settings
+- **Artifact Registry** repository names
+
+### API Management
+All GCP APIs are managed centrally in the GKE Service Project module using a consolidated `for_each` resource. This ensures:
+- Single source of truth for API enablement
+- Consistent configuration across all services
+- Proper dependency management between modules

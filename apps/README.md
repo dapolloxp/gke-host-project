@@ -50,3 +50,41 @@ podman run -it alpine:latest /bin/sh
 
 ### Security Note:
 This pod runs with privileged security context which is required for podman to function properly. Only use this in trusted environments and ensure proper RBAC controls are in place.
+
+## Secret Manager Integration
+
+The infrastructure includes GCP Secret Manager with the following secrets configured by default:
+- `database-password`
+- `api-key` 
+- `jwt-secret`
+
+### Accessing Secrets in Kubernetes
+
+GKE nodes have IAM permissions to access secrets. Use the Secret Manager CSI driver or direct API calls:
+
+```yaml
+# Example: Using Secret Manager CSI driver
+apiVersion: v1
+kind: SecretProviderClass
+metadata:
+  name: app-secrets
+spec:
+  provider: gcp
+  parameters:
+    secrets: |
+      - resourceName: "projects/networkpatterns2/secrets/database-password/versions/latest"
+        path: "database-password"
+```
+
+### Managing Secrets
+
+```bash
+# List all secrets
+gcloud secrets list --project=networkpatterns2
+
+# View secret value (requires proper IAM)
+gcloud secrets versions access latest --secret="database-password" --project=networkpatterns2
+
+# Update secret value
+echo "new-secret-value" | gcloud secrets versions add database-password --data-file=- --project=networkpatterns2
+```

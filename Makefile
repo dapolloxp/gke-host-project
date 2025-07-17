@@ -24,6 +24,10 @@ init: ## Initialize Terraform
 	@echo "$(BLUE)Initializing Terraform...$(NC)"
 	terraform init
 
+upgrade: ## Upgrade Terraform providers to latest versions
+	@echo "$(BLUE)Upgrading Terraform providers...$(NC)"
+	terraform init -upgrade
+
 validate: ## Validate Terraform configuration
 	@echo "$(BLUE)Validating Terraform configuration...$(NC)"
 	terraform validate
@@ -60,7 +64,7 @@ force-destroy: ## Force destroy with IAM cleanup (use if regular destroy fails)
 
 enable-apis: ## Enable required APIs for both projects
 	@echo "$(BLUE)Enabling APIs for service project...$(NC)"
-	gcloud services enable container.googleapis.com compute.googleapis.com cloudresourcemanager.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com --project=$(SERVICE_PROJECT_ID)
+	gcloud services enable container.googleapis.com compute.googleapis.com cloudresourcemanager.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com --project=$(SERVICE_PROJECT_ID)
 	@echo "$(BLUE)Enabling APIs for host project...$(NC)"
 	gcloud services enable compute.googleapis.com cloudresourcemanager.googleapis.com --project=$(HOST_PROJECT_ID)
 	@echo "$(GREEN)APIs enabled successfully!$(NC)"
@@ -110,12 +114,15 @@ build-podman: ## Build and push podman runner image to Artifact Registry
 	gcloud builds submit . --config=apps/podman-runner/cloudbuild.yaml --project=$(SERVICE_PROJECT_ID)
 
 deploy-podman: ## Deploy podman pod to GKE cluster
+	@echo "$(BLUE)Deploying GCP secrets configuration...$(NC)"
+	kubectl apply -f apps/podman-runner/gcp-secrets.yaml
 	@echo "$(BLUE)Deploying podman pod to GKE...$(NC)"
 	kubectl apply -f apps/podman-runner/podman-pod.yaml
 
 delete-podman: ## Delete podman pod from GKE cluster
 	@echo "$(BLUE)Deleting podman pod from GKE...$(NC)"
 	kubectl delete -f apps/podman-runner/podman-pod.yaml --ignore-not-found=true
+	kubectl delete -f apps/podman-runner/gcp-secrets.yaml --ignore-not-found=true
 
 podman-logs: ## Show logs from podman pod
 	@echo "$(BLUE)Showing logs from podman pod...$(NC)"
@@ -124,3 +131,14 @@ podman-logs: ## Show logs from podman pod
 podman-shell: ## Get shell access to podman pod
 	@echo "$(BLUE)Opening shell in podman pod...$(NC)"
 	kubectl exec -it privileged-podman-pod -- /bin/bash
+
+new-branch: ## Create new branch if files have been modified
+	@echo "$(BLUE)Checking for modified files...$(NC)"
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		BRANCH_NAME="feature-$$(date +%Y%m%d-%H%M%S)"; \
+		echo "$(YELLOW)Creating new branch: $$BRANCH_NAME$(NC)"; \
+		git checkout -b $$BRANCH_NAME; \
+		echo "$(GREEN)Created and switched to branch: $$BRANCH_NAME$(NC)"; \
+	else \
+		echo "$(GREEN)No modified files found$(NC)"; \
+	fi
