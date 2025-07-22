@@ -11,7 +11,7 @@ YELLOW = \033[1;33m
 BLUE = \033[0;34m
 NC = \033[0m # No Color
 
-.PHONY: help init plan apply destroy validate fmt check clean enable-apis connect-gke
+.PHONY: help init plan apply destroy validate fmt check clean enable-apis connect-gke refresh
 
 # Default target
 help: ## Show this help message
@@ -76,6 +76,10 @@ connect-gke: ## Connect to GKE cluster (requires cluster to be deployed)
 	echo "Connecting to cluster: $$CLUSTER_NAME in region: $$REGION"; \
 	gcloud container clusters get-credentials $$CLUSTER_NAME --region $$REGION --project $(SERVICE_PROJECT_ID)
 
+refresh: ## Refresh Terraform state from real infrastructure
+	@echo "$(BLUE)Refreshing Terraform state...$(NC)"
+	terraform refresh -var-file="terraform.tfvars"
+
 show-outputs: ## Show Terraform outputs
 	@echo "$(BLUE)Terraform Outputs:$(NC)"
 	terraform output
@@ -113,7 +117,14 @@ build-podman: ## Build and push podman runner image to Artifact Registry
 	@echo "$(BLUE)Building podman runner image with Cloud Build...$(NC)"
 	gcloud builds submit . --config=apps/podman-runner/cloudbuild.yaml --project=$(SERVICE_PROJECT_ID)
 
-deploy-podman: ## Deploy podman pod to GKE cluster
+install-secret-csi: ## Install Secret Store CSI Driver components
+	@echo "$(BLUE)Installing Secret Store CSI Driver CRDs and components...$(NC)"
+	kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/secrets-store-csi-driver/v1.4.0/deploy/secrets-store-csi-driver.yaml
+	kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/secrets-store-csi-driver-provider-gcp/main/deploy/provider-gcp-plugin.yaml
+	@echo "$(BLUE)Waiting for CSI driver to be ready...$(NC)"
+	kubectl wait --for=condition=ready pod -l app=csi-secrets-store-provider-gcp -n kube-system --timeout=120s
+
+deploy-podman: install-secret-csi ## Deploy podman pod to GKE cluster
 	@echo "$(BLUE)Deploying GCP secrets configuration...$(NC)"
 	kubectl apply -f apps/podman-runner/gcp-secrets.yaml
 	@echo "$(BLUE)Deploying podman pod to GKE...$(NC)"
@@ -154,6 +165,40 @@ vm-status: ## Show Ubuntu VM status
 	ZONE=$$(terraform output -raw zone 2>/dev/null || echo "us-central1-a"); \
 	echo "VM: $$VM_NAME in zone: $$ZONE"; \
 	gcloud compute instances describe $$VM_NAME --zone=$$ZONE --project=$(SERVICE_PROJECT_ID) --format="value(status)" 2>/dev/null || echo "$(RED)VM not found or error occurred$(NC)"
+
+bind-secret-access: ## Bind secret access to workload identity service account
+	@echo "$(BLUE)Binding secret access to service account...$(NC)"
+	@if [ -z "$(SECRET_NAME)" ]; then echo "$(RED)Error: SECRET_NAME is required. Usage: make bind-secret-access SECRET_NAME=my-secret$(NC)"; exit 1; fi
+	@PROJECT_NUMBER=$$(gcloud projects describe $(SERVICE_PROJECT_ID) --format="value(projectNumber)"); \
+	echo "Project Number: $$PROJECT_NUMBER"; \
+	echo "Service Project: $(SERVICE_PROJECT_ID)"; \
+	echo "Secret: $(SECRET_NAME)"; \
+	gcloud secrets add-iam-policy-binding $(SECRET_NAME) \
+		--role=roles/secretmanager.secretAccessor \
+		--member=principal://iam.googleapis.com/projects/$$PROJECT_NUMBER/locations/global/workloadIdentityPools/$(SERVICE_PROJECT_ID).svc.id.goog/subject/ns/default/sa/secret-access-sa \
+		--project=$(SERVICE_PROJECT_ID)
+
+bind-all-secrets: ## Bind access to all secrets defined in terraform.tfvars
+	@echo "$(BLUE)Binding access to all secrets for service account...$(NC)"
+	@PROJECT_NUMBER=$$(gcloud projects describe $(SERVICE_PROJECT_ID) --format="value(projectNumber)"); \
+	echo "Project Number: $$PROJECT_NUMBER"; \
+	echo "Service Project: $(SERVICE_PROJECT_ID)"; \
+	echo "$(YELLOW)Binding access to database-password secret...$(NC)"; \
+	gcloud secrets add-iam-policy-binding database-password \
+		--role=roles/secretmanager.secretAccessor \
+		--member=principal://iam.googleapis.com/projects/$$PROJECT_NUMBER/locations/global/workloadIdentityPools/$(SERVICE_PROJECT_ID).svc.id.goog/subject/ns/default/sa/secret-access-sa \
+		--project=$(SERVICE_PROJECT_ID); \
+	echo "$(YELLOW)Binding access to api-key secret...$(NC)"; \
+	gcloud secrets add-iam-policy-binding api-key \
+		--role=roles/secretmanager.secretAccessor \
+		--member=principal://iam.googleapis.com/projects/$$PROJECT_NUMBER/locations/global/workloadIdentityPools/$(SERVICE_PROJECT_ID).svc.id.goog/subject/ns/default/sa/secret-access-sa \
+		--project=$(SERVICE_PROJECT_ID); \
+	echo "$(YELLOW)Binding access to jwt-secret secret...$(NC)"; \
+	gcloud secrets add-iam-policy-binding jwt-secret \
+		--role=roles/secretmanager.secretAccessor \
+		--member=principal://iam.googleapis.com/projects/$$PROJECT_NUMBER/locations/global/workloadIdentityPools/$(SERVICE_PROJECT_ID).svc.id.goog/subject/ns/default/sa/secret-access-sa \
+		--project=$(SERVICE_PROJECT_ID); \
+	echo "$(GREEN)All secrets bound successfully!$(NC)"
 
 new-branch: ## Create new branch if files have been modified
 	@echo "$(BLUE)Checking for modified files...$(NC)"

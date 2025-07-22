@@ -1,10 +1,17 @@
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: secret-access-sa
+  namespace: default
+---
+apiVersion: v1
 kind: Pod
 metadata:
   name: privileged-podman-pod
   labels:
     app: podman-runner
 spec:
+  serviceAccountName: secret-access-sa
   containers:
   - name: podman-runner
     image: us-central1-docker.pkg.dev/networkpatterns2/gke-images/podman-runner:latest
@@ -20,13 +27,8 @@ spec:
         - SETUID
         - SETGID
     volumeMounts:
-    - name: container-storage
-      mountPath: /var/lib/containers
-    - name: tmp-storage
-      mountPath: /tmp
-    - name: gcp-secrets-volume
+    - name: database-password
       mountPath: /mnt/secrets
-      readOnly: true
     resources:
       requests:
         memory: "512Mi"
@@ -34,34 +36,12 @@ spec:
       limits:
         memory: "2Gi"
         cpu: "1"
-    env:
-    - name: STORAGE_DRIVER
-      value: "overlay"
-    - name: DATABASE_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: gcp-secrets
-          key: database-password
-    - name: API_KEY
-      valueFrom:
-        secretKeyRef:
-          name: gcp-secrets
-          key: api-key
-    - name: JWT_SECRET
-      valueFrom:
-        secretKeyRef:
-          name: gcp-secrets
-          key: jwt-secret
     command: ["/bin/bash"]
     args: ["-c", "while true; do sleep 30; done"]
   volumes:
-  - name: container-storage
-    emptyDir: {}
-  - name: tmp-storage
-    emptyDir: {}
-  - name: gcp-secrets-volume
+  - name: database-password
     csi:
-      driver: secrets-store.csi.k8s.io
+      driver: secrets-store-gke.csi.k8s.io
       readOnly: true
       volumeAttributes:
         secretProviderClass: gcp-secret-provider
